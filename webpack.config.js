@@ -16,11 +16,11 @@ module.exports = {
   plugins: [],
   module: {
     rules: [
-      // {
-      //   test: /\.(js|jsx)$/,
-      //   exclude: /node_modules/,
-      //   use: 'babel-loader'
-      // },
+      {
+        test: /\.(js|jsx)$/,
+        exclude: /node_modules/,
+        use: 'babel-loader'
+      },
       {
         test: /\.(png|jpe?g|gif|svg)$/i,
         use: [

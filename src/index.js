@@ -1,1 +1,1 @@
-console.log('Hello');
+console.log(<div><p>Hello World</p></div>);
