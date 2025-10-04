@@ -1,1 +1,8 @@
-console.log(<div><p>Hello World</p></div>);
+import {createApp} from "@/app";
+
+createApp({
+  mountEl: '#app',
+  render() {
+    return <div></div>
+  }
+});
