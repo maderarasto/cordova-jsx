@@ -4,9 +4,20 @@ type JSX = {
   children: (JSX | string)[]
 }
 
-type FunctionComponent = () => JSX | string
+type RenderResult = JSX | string
+type RenderCallback = () => RenderResult
+
+type RenderNodeType = (
+  | 'root'
+  | 'component'
+  | 'element'
+  | 'text'
+)
+
+type RenderNodeTag = string | RenderCallback
+type RenderNodeProps = Record<string, any>
 
 type AppConfig = {
   mountEl: HTMLElement | string
-  render: FunctionComponent
+  render: RenderCallback
 }
