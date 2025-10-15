@@ -14,6 +14,13 @@ type RenderNodeType = (
   | 'text'
 )
 
+type RenderNodeEffect = (
+  | ''
+  | 'Placement'
+  | 'Update'
+  | 'Deletion'
+)
+
 type RenderNodeTag = string | RenderCallback
 type RenderNodeProps = Record<string, any>
 

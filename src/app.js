@@ -62,13 +62,15 @@ class RenderNode {
     this.type = type;
     this.tag = tag;
     this.props = otherProps;
+    /** @type {RenderNodeEffect} */
+    this.effect = '';
 
     /** @type {RenderNode[]} */
     this.children = [];
     /** @type {RenderNode} */
     this.parent = null;
     /** @type {Component} */
-    this.instance = this.type === 'component' ? new tag() : null;
+    this.instance = null;
     /** @type {Node} */
     this.elementRef = null;
   }
@@ -150,10 +152,6 @@ class RenderNode {
       parent.appendChild(node);
     }
 
-    if (node._type === 'component') {
-      RenderNode.fromJSX(node.instance.render(), node);
-    }
-
     if (!children) {
       children = [];
     }
@@ -231,10 +229,12 @@ export class CordovaApp {
 
     const clonedTree = Object.assign({}, this._rootRenderNode);
     const newJSX = this._rootFunc();
-    const newTree = createRenderTree(newJSX);
-    const newTree2 = createRenderTree(newJSX);
 
-    this._resolveNodeChanges(newTree, newTree2);
+    const newTree = createRenderTree(newJSX);
+    console.log(newTree);
+    // const newTree2 = createRenderTree(newJSX);
+    //
+    // this._resolveNodeChanges(newTree, newTree2);
   }
 
   /**
@@ -245,16 +245,16 @@ export class CordovaApp {
    */
   _resolveNodeChanges(realNode, newNode) {
     if (realNode && realNode.tag !== newNode.tag) {
-      // mark realNode for deletion
+      realNode.effect = 'Deletion';
       // mount newNode as new
       return;
     }
 
     if (!realNode) {
-      // mark newNode for placement
+      newNode.effect = 'Placement';
     } else {
       // remember state from realNode
-      // mark newNode for update
+      newNode.effect = 'Update';
     }
 
     let position = 0;
