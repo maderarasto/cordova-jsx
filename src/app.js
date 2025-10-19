@@ -184,6 +184,67 @@ function createRenderTree(jsx) {
   return rootNode;
 }
 
+/**
+ *
+ * @param {RenderNode} currentNode
+ * @param {RenderNode} newNode
+ */
+function resolveNodeChanges(currentNode, newNode) {
+  if (currentNode && currentNode.tag !== newNode.tag) {
+    currentNode.effect = 'Deletion';
+    mountRenderSubtree(newNode);
+    return;
+  }
+
+  if (!currentNode) {
+    mountRenderSubtree(newNode);
+  } else {
+    // remember state from realNode
+    newNode.effect = 'Update';
+  }
+
+  let position = 0;
+
+  while (position < newNode.children.length) {
+    const realNodeChild = currentNode.children[position];
+    const newNodeChild = newNode.children[position];
+
+    // find matching child node in real node
+    // resolve node changes with match child node
+
+    position++;
+  }
+
+  while (position < currentNode.children.length) {
+    // mark realNode for deletion
+    position++;
+  }
+}
+
+/**
+ *
+ * @param {RenderNode} node
+ */
+function mountRenderSubtree(node) {
+  node.effect = 'Placement';
+
+  if (node.type === 'component') {
+    node.instance = new node.tag();
+
+    const jsx = node.instance.render();
+    const subNode = RenderNode.fromJSX(jsx);
+
+    if (subNode) {
+      node.appendChild(subNode);
+    }
+  }
+
+  node.children.forEach((child) => {
+    child.effect = 'Placement';
+    mountRenderSubtree(child);
+  });
+}
+
 export class CordovaApp {
   constructor() {
     /** @type {HTMLElement} */
@@ -231,49 +292,10 @@ export class CordovaApp {
     const newJSX = this._rootFunc();
 
     const newTree = createRenderTree(newJSX);
-    console.log(newTree);
+
     // const newTree2 = createRenderTree(newJSX);
     //
     // this._resolveNodeChanges(newTree, newTree2);
-  }
-
-  /**
-   *
-   * @param {RenderNode} realNode
-   * @param {RenderNode} newNode
-   * @private
-   */
-  _resolveNodeChanges(realNode, newNode) {
-    if (realNode && realNode.tag !== newNode.tag) {
-      realNode.effect = 'Deletion';
-      // mount newNode as new
-      return;
-    }
-
-    if (!realNode) {
-      newNode.effect = 'Placement';
-    } else {
-      // remember state from realNode
-      newNode.effect = 'Update';
-    }
-
-    let position = 0;
-
-    while (position < newNode.children.length) {
-      const realNodeChild = realNode.children[position];
-      const newNodeChild = newNode.children[position];
-
-      // find matching child node in real node
-      // resolve node changes with match child node
-
-      position++;
-    }
-
-
-    while (position < realNode.children.length) {
-      // mark realNode for deletion
-      position++;
-    }
   }
 }
 
