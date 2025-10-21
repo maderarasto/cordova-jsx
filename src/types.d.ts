@@ -24,6 +24,14 @@ type RenderNodeEffect = (
 type RenderNodeTag = string | RenderCallback
 type RenderNodeProps = Record<string, any>
 
+type RenderChange = {
+  effect: RenderNodeEffect
+  parent: RenderNode|null
+  nodeRef: RenderNode
+  position: number
+  elementRef: HTMLElement|null
+}
+
 type AppConfig = {
   mountEl: HTMLElement | string
   render: RenderCallback

@@ -185,40 +185,26 @@ function createRenderTree(jsx) {
 }
 
 /**
+ * Find a matching node in children of current node.
+ * Matching
  *
  * @param {RenderNode} currentNode
- * @param {RenderNode} newNode
+ * @param {RenderNode} searchedNode
+ * @param {number} position
+ * @return {RenderNode}
  */
-function resolveNodeChanges(currentNode, newNode) {
-  if (currentNode && currentNode.tag !== newNode.tag) {
-    currentNode.effect = 'Deletion';
-    mountRenderSubtree(newNode);
-    return;
+function findMatchingNode(currentNode, searchedNode, position) {
+  if (!currentNode || currentNode.children.length <= position) {
+    return null;
   }
 
-  if (!currentNode) {
-    mountRenderSubtree(newNode);
-  } else {
-    // remember state from realNode
-    newNode.effect = 'Update';
+  let foundNode = currentNode.children[position];
+
+  if (!foundNode || foundNode.tag !== searchedNode.tag) {
+    return null;
   }
 
-  let position = 0;
-
-  while (position < newNode.children.length) {
-    const realNodeChild = currentNode.children[position];
-    const newNodeChild = newNode.children[position];
-
-    // find matching child node in real node
-    // resolve node changes with match child node
-
-    position++;
-  }
-
-  while (position < currentNode.children.length) {
-    // mark realNode for deletion
-    position++;
-  }
+  return foundNode;
 }
 
 /**
@@ -243,6 +229,98 @@ function mountRenderSubtree(node) {
     child.effect = 'Placement';
     mountRenderSubtree(child);
   });
+}
+
+/**
+ *
+ * @param {RenderNode} currentNode
+ * @param {RenderNode} newNode
+ */
+function resolveNodeChanges(currentNode, newNode) {
+  if (currentNode && currentNode.tag !== newNode.tag) {
+    currentNode.effect = 'Deletion';
+    mountRenderSubtree(newNode);
+    return;
+  }
+
+  if (!currentNode) {
+    mountRenderSubtree(newNode);
+    return;
+  } else {
+    // remember state from realNode
+    newNode.effect = 'Update';
+  }
+
+  let position = 0;
+
+  while (position < newNode.children.length) {
+    const newNodeChild = newNode.children[position];
+    const matchingNode = findMatchingNode(currentNode, newNodeChild, position);
+
+    resolveNodeChanges(matchingNode, newNodeChild);
+    position++;
+  }
+
+  while (position < currentNode.children.length) {
+    currentNode.children[position].effect = 'Deletion';
+    position++;
+  }
+}
+
+/**
+ * Traverse all nodes and resolve what changes needs to be processed.
+ *
+ * @param {RenderNode} node
+ * @param {number} position
+ * @returns {RenderChange[]}
+ */
+function resolveRenderChanges(node, position = 0) {
+  /** @type {RenderChange[]} */
+  let changes = [];
+
+  if (!node) {
+    return changes;
+  }
+
+  if (!node.isRoot() && node.effect !== '') {
+    const change = {
+      effect: node.effect,
+      parent: node.parent,
+      nodeRef: node,
+      position: position,
+      elementRef: null
+    };
+
+    changes.push(change);
+    node.effect = '';
+  }
+
+  node.children.forEach((child, index) => {
+    changes = [
+      ...changes,
+      ...resolveRenderChanges(child, index),
+    ];
+  });
+
+  return changes;
+}
+
+/**
+ *
+ * @param {RenderNode} node
+ */
+function unmountRenderNode(node) {
+  node.children.forEach((child) => {
+    unmountRenderNode(child);
+  });
+
+  if (node.elementRef) {
+    node.elementRef.parentNode.removeChild(node.elementRef);
+  }
+
+  if (node.type === 'component') {
+    node.instance.destroyed();
+  }
 }
 
 export class CordovaApp {
@@ -288,14 +366,21 @@ export class CordovaApp {
       throw new Error('Could not find a root element');
     }
 
-    const clonedTree = Object.assign({}, this._rootRenderNode);
     const newJSX = this._rootFunc();
-
     const newTree = createRenderTree(newJSX);
 
-    // const newTree2 = createRenderTree(newJSX);
-    //
-    // this._resolveNodeChanges(newTree, newTree2);
+    resolveNodeChanges(this._rootRenderNode, newTree);
+
+    const deletions = resolveRenderChanges(this._rootRenderNode);
+    const newChanges = resolveRenderChanges(newTree);
+
+    deletions.forEach((change) => {
+      if (change.effect === 'Deletion') {
+        unmountRenderNode(change.nodeRef)
+      }
+    });
+
+    this._rootRenderNode = newTree;
   }
 }
 
