@@ -27,7 +27,7 @@ type RenderNodeProps = Record<string, any>
 type RenderChange = {
   effect: RenderNodeEffect
   parent: RenderNode|null
-  nodeRef: RenderNode
+  nodeRef: RenderNode~
   position: number
   elementRef: HTMLElement|null
 }

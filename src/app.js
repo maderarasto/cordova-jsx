@@ -64,6 +64,7 @@ class RenderNode {
     this.props = otherProps;
     /** @type {RenderNodeEffect} */
     this.effect = '';
+    this.mounted = false;
 
     /** @type {RenderNode[]} */
     this.children = [];
@@ -82,6 +83,20 @@ class RenderNode {
    */
   isRoot() {
     return this._type === 'root';
+  }
+
+  allChildrenMounted() {
+    return this.children.reduce((count, childNode) => {
+      let result = false;
+
+      if (['element', 'text'].includes(childNode.type)) {
+        result = childNode.elementRef !== null;
+      } else if (childNode.type === 'component') {
+        result = childNode.mounted;
+      }
+
+      return count + (result && childNode.allChildrenMounted() ? 1 : 0);
+    }, 0) === this.children.length;
   }
 
   /**
@@ -323,6 +338,79 @@ function unmountRenderNode(node) {
   }
 }
 
+/**
+ * Splits changes list into object with arrays for placements, updates and deletions.
+ *
+ * @param {RenderChange[]} changes
+ * @returns {Record<string, RenderChange[]>}
+ */
+function splitRenderChanges(changes = []) {
+  const splitChanges = {
+    placements: [],
+    updates: [],
+    deletions: [],
+  };
+
+  changes.forEach(change => {
+    const key = change.effect.toLowerCase() + 's';
+    splitChanges[key].push(change);
+  });
+
+  return splitChanges;
+}
+
+/**
+ *
+ * @param {RenderNode} renderNode
+ */
+function findClosestDOMNode(renderNode) {
+  let currentNode = renderNode;
+
+  while (currentNode && currentNode.parent) {
+    if (currentNode.parent.elementRef) {
+      return currentNode.parent.elementRef;
+    }
+
+    currentNode = currentNode.parent;
+  }
+
+  return null;
+}
+
+/**
+ *
+ * @param {RenderNode} renderNode
+ * @param {number} index
+ */
+function createElement(renderNode, index) {
+  if (renderNode.type === 'text') {
+    renderNode.elementRef = document.createTextNode(renderNode.tag);
+  } else if (renderNode.type === 'element') {
+    renderNode.elementRef = document.createElement(renderNode.tag);
+  }
+
+  const parentEl = findClosestDOMNode(renderNode);
+  const childAt = parentEl.children[index];
+
+  parentEl.insertBefore(renderNode.elementRef, childAt);
+
+}
+
+/**
+ *
+ * @param {RenderNode[]} nodes
+ */
+function processComponentNodes(nodes) {
+  while (nodes.length > 0) {
+    if (!nodes[0].allChildrenMounted()) {
+      break;
+    }
+
+    nodes[0].mounted = true;
+    nodes.shift();
+  }
+}
+
 export class CordovaApp {
   constructor() {
     /** @type {HTMLElement} */
@@ -381,6 +469,27 @@ export class CordovaApp {
     });
 
     this._rootRenderNode = newTree;
+    this._rootRenderNode.elementRef = this._rootEl;
+
+    /** @type RenderNode[] */
+    const processedComponentNodes = [];
+    
+    newChanges.forEach(change => {
+      if (change.effect !== 'Placement') {
+        return;
+      }
+
+      if (change.nodeRef.type === 'component') {
+        processedComponentNodes.unshift(change.nodeRef);
+        console.log([...processedComponentNodes]);
+      }
+
+      if (['element', 'text'].includes(change.nodeRef.type)) {
+        createElement(change.nodeRef, change.position);
+      }
+
+      processComponentNodes(processedComponentNodes);
+    })
   }
 }
 
