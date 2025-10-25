@@ -1,4 +1,6 @@
 import htmlTags from "html-tags";
+import svgTags from 'svg-tags';
+import selfClosingTags from 'self-closing-tags';
 
 export class Component {
   /**
@@ -157,7 +159,7 @@ class RenderNode {
 
     if (typeof elementName === 'function') {
       node = new RenderNode('component', elementName);
-    } else if ([...htmlTags].includes(elementName)) {
+    } else if ([...htmlTags].includes(elementName) || [...svgTags].includes(elementName)) {
       node = new RenderNode('element', elementName, attributes);
     } else {
       node = new RenderNode('text', elementName);
@@ -377,6 +379,73 @@ function findClosestDOMNode(renderNode) {
   return null;
 }
 
+function resolveClassName(value) {
+
+}
+
+function resolveStyle(value) {
+
+}
+
+function resolveElementAttributes(element, attributes) {
+  for (let [key, value] of Object.entries(attributes)) {
+    if (key === 'class') {
+      value = resolveClassName(value);
+    } else if (key === 'style') {
+      value = resolveStyle(value);
+    }
+    if (element.tagName.toLowerCase() === 'svg') {
+      console.log(key, value);
+      element.setAttribute(key, value);
+    } else {
+      element.setAttribute(key, value);
+    }
+  }
+}
+
+/**
+ *
+ * @param {RenderNode} node
+ * @param {string} selector
+ */
+function findClosestNode(node, selector) {
+  if (!selector) {
+    throw new Error('A selector can\'t be empty string');
+  }
+
+  let currentNode = node;
+
+  while (currentNode?.parent) {
+    const parentProps = currentNode.parent.props ?? {};
+
+    if (currentNode.parent.type !== 'element') {
+      currentNode = currentNode.parent;
+      continue;
+    }
+
+    if (selector.startsWith('#') && parentProps.id === selector.substring(1)) {
+      console.log('1');
+      return  currentNode.parent;
+    } else if (selector.startsWith('.') && parentProps.class === selector.substring(1)) {
+      console.log('2');
+      return currentNode.parent;
+    } else if (/[[a-zA-Z0-9\-_]*(?:="[a-zA-Z0-9\-_]*")?]/.test(selector)) {
+      const value = selector.replace('[', '').replace(']', '');
+
+      if (currentNode.parent.props[value]) {
+        return currentNode.parent;
+      }
+    } else if (currentNode.parent.tag === selector) {
+      console.log('4');
+      return currentNode.parent;
+    }
+
+    currentNode = currentNode.parent;
+  }
+
+  return null;
+}
+
 /**
  *
  * @param {RenderNode} renderNode
@@ -386,7 +455,16 @@ function createElement(renderNode, index) {
   if (renderNode.type === 'text') {
     renderNode.elementRef = document.createTextNode(renderNode.tag);
   } else if (renderNode.type === 'element') {
-    renderNode.elementRef = document.createElement(renderNode.tag);
+    const closestWithNS = findClosestNode(renderNode, '[xmlns]');
+    const xmlns = renderNode.props.xmlns ?? closestWithNS?.props.xmlns ?? '';
+
+    if (xmlns) {
+      renderNode.elementRef = document.createElementNS(xmlns, renderNode.tag);
+    } else {
+      renderNode.elementRef = document.createElement(renderNode.tag);
+    }
+
+    resolveElementAttributes(renderNode.elementRef, renderNode.props);
   }
 
   const parentEl = findClosestDOMNode(renderNode);
@@ -505,7 +583,7 @@ export function createApp(config) {
 
   window.$app = new CordovaApp();
   window.$app.setRootFunction(config.render);
-
+  console.log(selfClosingTags);
   document.addEventListener('deviceready', () => {
     $app.mount(config.mountEl);
   });
