@@ -380,11 +380,41 @@ function findClosestDOMNode(renderNode) {
 }
 
 function resolveClassName(value) {
+  if (typeof value !== 'object') {
+    return value.toString();
+  }
 
+  let classTokens = !Array.isArray(value) ? Object.keys(value).filter((className) => {
+    return value[className];
+  }) : value;
+
+  classTokens = classTokens.filter((className, index, tokens) => {
+    return tokens.indexOf(className) === index;
+  });
+
+  return classTokens.join(' ');
 }
 
 function resolveStyle(value) {
+  if (Array.isArray(value)) {
+    throw new Error('Style cannot be use as array!');
+  }
 
+  if (typeof value !== 'object') {
+    return value.toString();
+  }
+
+  return Object.entries(value).map(([key, value]) => {
+    if (/^[a-z]*[A-Z]/.test(key)) {
+      const keyTokens = key.split(/(?=[A-Z])/).map((token) => {
+        return token.toLowerCase();
+      });
+
+      key = keyTokens.join('-');
+    }
+
+    return `${key}: ${value}`;
+  }).join('; ');
 }
 
 function resolveElementAttributes(element, attributes) {
@@ -395,7 +425,6 @@ function resolveElementAttributes(element, attributes) {
       value = resolveStyle(value);
     }
     if (element.tagName.toLowerCase() === 'svg') {
-      console.log(key, value);
       element.setAttribute(key, value);
     } else {
       element.setAttribute(key, value);

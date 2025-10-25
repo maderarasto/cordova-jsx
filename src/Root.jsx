@@ -10,7 +10,7 @@ export default class Root extends Component {
 
   render() {
     return (
-      <div>
+      <div style={{ fontSize: '1rem', color: 'black' }}>
         <div id="top-header" class={['class-1', 'class-2']}>
           <Header />
           <nav>Navigation</nav>
