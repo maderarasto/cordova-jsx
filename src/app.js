@@ -76,6 +76,10 @@ class RenderNode {
     this.instance = null;
     /** @type {Node} */
     this.elementRef = null;
+    /** @type {Record<string, Function[]>} */
+    this.listeners = {};
+    /** @type {Record<string, any>} */
+    this.state = {};
   }
 
   /**
@@ -99,6 +103,38 @@ class RenderNode {
 
       return count + (result && childNode.allChildrenMounted() ? 1 : 0);
     }, 0) === this.children.length;
+  }
+
+  /**
+   *
+   * @param {string} type
+   * @param {Function} listener
+   */
+  addListener(type, listener) {
+    if (!this.elementRef) {
+      return;
+    }
+
+    if (!this.listeners[type]) {
+      this.listeners[type] = [];
+    }
+
+    this.elementRef.addEventListener(type, listener);
+    this.listeners[type].push(listener);
+  }
+
+  cleanListeners() {
+    for (const [type, listeners] of Object.entries(this.listeners)) {
+      if (!this.elementRef) {
+        continue;
+      }
+
+      listeners.forEach((listener) => {
+        this.elementRef.removeEventListener(type, listener);
+      })
+    }
+
+    this.listeners = {};
   }
 
   /**
@@ -332,6 +368,7 @@ function unmountRenderNode(node) {
   });
 
   if (node.elementRef) {
+    node.cleanListeners();
     node.elementRef.parentNode.removeChild(node.elementRef);
   }
 
@@ -417,17 +454,27 @@ function resolveStyle(value) {
   }).join('; ');
 }
 
-function resolveElementAttributes(element, attributes) {
-  for (let [key, value] of Object.entries(attributes)) {
+
+/**
+ *
+ * @param {RenderNode} node
+ */
+function resolveElementAttributes(node) {
+  for (let [key, value] of Object.entries(node.props)) {
+    if (key.startsWith('on')) {
+      node.addListener(key.substring(2), value);
+      continue;
+    }
+
     if (key === 'class') {
       value = resolveClassName(value);
     } else if (key === 'style') {
       value = resolveStyle(value);
     }
-    if (element.tagName.toLowerCase() === 'svg') {
-      element.setAttribute(key, value);
+    if (node.elementRef.tagName.toLowerCase() === 'svg') {
+      node.elementRef.setAttribute(key, value);
     } else {
-      element.setAttribute(key, value);
+      node.elementRef.setAttribute(key, value);
     }
   }
 }
@@ -453,10 +500,8 @@ function findClosestNode(node, selector) {
     }
 
     if (selector.startsWith('#') && parentProps.id === selector.substring(1)) {
-      console.log('1');
       return  currentNode.parent;
     } else if (selector.startsWith('.') && parentProps.class === selector.substring(1)) {
-      console.log('2');
       return currentNode.parent;
     } else if (/[[a-zA-Z0-9\-_]*(?:="[a-zA-Z0-9\-_]*")?]/.test(selector)) {
       const value = selector.replace('[', '').replace(']', '');
@@ -465,7 +510,6 @@ function findClosestNode(node, selector) {
         return currentNode.parent;
       }
     } else if (currentNode.parent.tag === selector) {
-      console.log('4');
       return currentNode.parent;
     }
 
@@ -493,7 +537,7 @@ function createElement(renderNode, index) {
       renderNode.elementRef = document.createElement(renderNode.tag);
     }
 
-    resolveElementAttributes(renderNode.elementRef, renderNode.props);
+    resolveElementAttributes(renderNode);
   }
 
   const parentEl = findClosestDOMNode(renderNode);
