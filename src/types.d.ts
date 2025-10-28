@@ -26,10 +26,12 @@ type RenderNodeProps = Record<string, any>
 
 type RenderChange = {
   effect: RenderNodeEffect
-  parent: RenderNode|null
-  nodeRef: RenderNode~
+  parent: Object
+  nodeRef: Object
   position: number
   elementRef: HTMLElement|null
+  oldProps?: Record<string, any>
+  newProps?: Record<string, any>
 }
 
 type AppConfig = {

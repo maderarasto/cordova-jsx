@@ -1,6 +1,8 @@
 import htmlTags from "html-tags";
 import svgTags from 'svg-tags';
-import selfClosingTags from 'self-closing-tags';
+
+/** @type {CordovaApp} */
+let app = null;
 
 export class Component {
   /**
@@ -15,7 +17,7 @@ export class Component {
 
   setState(state) {
     this.state = state;
-    // TODO: request re-render
+    $app.onStateChanged(this);
   }
 
   /**
@@ -63,9 +65,15 @@ class RenderNode {
     this.key = key;
     this.type = type;
     this.tag = tag;
-    this.props = otherProps;
+
+    /** @type {Record<string, any>} */
+    this.oldProps = {};
+    /** @type {Record<string, any>} */
+    this.pendingProps = otherProps;
+
     /** @type {RenderNodeEffect} */
     this.effect = '';
+    this.stateChanged = false;
     this.mounted = false;
 
     /** @type {RenderNode[]} */
@@ -78,8 +86,6 @@ class RenderNode {
     this.elementRef = null;
     /** @type {Record<string, Function[]>} */
     this.listeners = {};
-    /** @type {Record<string, any>} */
-    this.state = {};
   }
 
   /**
@@ -89,6 +95,10 @@ class RenderNode {
    */
   isRoot() {
     return this._type === 'root';
+  }
+
+  didStateChanged() {
+    return this.stateChanged;
   }
 
   allChildrenMounted() {
@@ -288,6 +298,89 @@ function mountRenderSubtree(node) {
  *
  * @param {RenderNode} currentNode
  * @param {RenderNode} newNode
+ * @param recursive
+ */
+function copyData(currentNode, newNode, recursive = false) {
+  if (currentNode.tag === newNode.tag) {
+    newNode.oldProps = currentNode.oldProps;
+
+    if (currentNode.instance && newNode.instance) {
+      newNode.instance.state = currentNode.instance.state;
+      newNode.stateChanged = currentNode.stateChanged;
+      // TODO: copy element refs
+    }
+  }
+
+  if (recursive) {
+    newNode.children.forEach((child, index) => {
+      copyData(currentNode.children[index], child, recursive);
+    })
+  }
+}
+
+function compareProps(oldProps, newProps) {
+  if (typeof oldProps !== 'object' || typeof newProps !== 'object') {
+    return false;
+  }
+
+  if (Object.keys(newProps).length !== Object.keys(newProps).length) {
+    return false;
+  }
+
+  return Object.entries(newProps).every(([key, value], index) => {
+    return value === oldProps[key];
+  });
+}
+
+/**
+ *
+ * @param {RenderNode} node
+ */
+function shouldUpdateNode(node) {
+  if (node.type !== 'component') {
+    return !compareProps(node.oldProps, node.pendingProps);
+  }
+
+  return node.didStateChanged() || !compareProps(node.oldProps, node.pendingProps);
+}
+
+/**
+ *
+ * @param {RenderNode} newNode
+ */
+function updateRenderNodes(newNode) {
+  newNode.effect = 'Update';
+
+  if (newNode.type !== 'component') {
+    return;
+  }
+
+  const jsx = newNode.instance.render();
+  const subNode = RenderNode.fromJSX(jsx);
+
+  if (subNode) {
+    copyData(newNode.children[0], subNode, true);
+    newNode.children = [];
+    newNode.appendChild(subNode);
+  }
+}
+
+/**
+ *
+ * @param {RenderNode} currentNode
+ * @param {RenderNode} newNode
+ */
+function reuseNodeChildren(currentNode, newNode) {
+  newNode.children = [];
+  currentNode.children.forEach((child) => {
+    newNode.appendChild(child);
+  });
+}
+
+/**
+ *
+ * @param {RenderNode} currentNode
+ * @param {RenderNode} newNode
  */
 function resolveNodeChanges(currentNode, newNode) {
   if (currentNode && currentNode.tag !== newNode.tag) {
@@ -300,8 +393,13 @@ function resolveNodeChanges(currentNode, newNode) {
     mountRenderSubtree(newNode);
     return;
   } else {
-    // remember state from realNode
-    newNode.effect = 'Update';
+    copyData(currentNode, newNode);
+
+    if (shouldUpdateNode(newNode)) {
+      updateRenderNodes(newNode);
+    } else {
+      reuseNodeChildren(currentNode, newNode);
+    }
   }
 
   let position = 0;
@@ -378,24 +476,17 @@ function unmountRenderNode(node) {
 }
 
 /**
- * Splits changes list into object with arrays for placements, updates and deletions.
  *
- * @param {RenderChange[]} changes
- * @returns {Record<string, RenderChange[]>}
+ * @param {RenderNode} node
  */
-function splitRenderChanges(changes = []) {
-  const splitChanges = {
-    placements: [],
-    updates: [],
-    deletions: [],
-  };
+function confirmNodesProps(node) {
+  if (!compareProps(node.oldProps, node.pendingProps)) {
+    node.oldProps = node.pendingProps;
+  }
 
-  changes.forEach(change => {
-    const key = change.effect.toLowerCase() + 's';
-    splitChanges[key].push(change);
+  node.children.forEach((child) => {
+    confirmNodesProps(child);
   });
-
-  return splitChanges;
 }
 
 /**
@@ -460,7 +551,7 @@ function resolveStyle(value) {
  * @param {RenderNode} node
  */
 function resolveElementAttributes(node) {
-  for (let [key, value] of Object.entries(node.props)) {
+  for (let [key, value] of Object.entries(node.pendingProps)) {
     if (key.startsWith('on')) {
       node.addListener(key.substring(2), value);
       continue;
@@ -492,7 +583,7 @@ function findClosestNode(node, selector) {
   let currentNode = node;
 
   while (currentNode?.parent) {
-    const parentProps = currentNode.parent.props ?? {};
+    const parentProps = currentNode.parent.pendingProps ?? {};
 
     if (currentNode.parent.type !== 'element') {
       currentNode = currentNode.parent;
@@ -506,7 +597,7 @@ function findClosestNode(node, selector) {
     } else if (/[[a-zA-Z0-9\-_]*(?:="[a-zA-Z0-9\-_]*")?]/.test(selector)) {
       const value = selector.replace('[', '').replace(']', '');
 
-      if (currentNode.parent.props[value]) {
+      if (currentNode.parent.pendingProps[value]) {
         return currentNode.parent;
       }
     } else if (currentNode.parent.tag === selector) {
@@ -529,7 +620,7 @@ function createElement(renderNode, index) {
     renderNode.elementRef = document.createTextNode(renderNode.tag);
   } else if (renderNode.type === 'element') {
     const closestWithNS = findClosestNode(renderNode, '[xmlns]');
-    const xmlns = renderNode.props.xmlns ?? closestWithNS?.props.xmlns ?? '';
+    const xmlns = renderNode.pendingProps.xmlns ?? closestWithNS?.pendingProps.xmlns ?? '';
 
     if (xmlns) {
       renderNode.elementRef = document.createElementNS(xmlns, renderNode.tag);
@@ -562,6 +653,25 @@ function processComponentNodes(nodes) {
   }
 }
 
+/**
+ *
+ * @param {RenderNode} node
+ * @param {Component} component
+ */
+function findNodeByComponent(node, component) {
+  let foundNode = null;
+
+  if (node.instance === component) {
+    return node;
+  }
+
+  node.children.forEach((child) => {
+    foundNode = findNodeByComponent(child, component);
+  });
+
+  return foundNode;
+}
+
 export class CordovaApp {
   constructor() {
     /** @type {HTMLElement} */
@@ -570,6 +680,7 @@ export class CordovaApp {
     this._rootFunc = null;
     /** @type {RenderNode} */
     this._rootRenderNode = null;
+    /** @type {RenderNode[]} */
   }
 
   /**
@@ -612,7 +723,7 @@ export class CordovaApp {
 
     const deletions = resolveRenderChanges(this._rootRenderNode);
     const newChanges = resolveRenderChanges(newTree);
-
+    console.log(deletions);
     deletions.forEach((change) => {
       if (change.effect === 'Deletion') {
         unmountRenderNode(change.nodeRef)
@@ -627,6 +738,7 @@ export class CordovaApp {
     
     newChanges.forEach(change => {
       if (change.effect !== 'Placement') {
+        console.log(change);
         return;
       }
 
@@ -640,7 +752,25 @@ export class CordovaApp {
       }
 
       processComponentNodes(processedComponentNodes);
-    })
+    });
+
+    confirmNodesProps(this._rootRenderNode);
+  }
+
+  /**
+   *
+   * @param {Component} component
+   */
+  onStateChanged(component) {
+    const foundNode = findNodeByComponent(this._rootRenderNode, component);
+
+    if (!foundNode) {
+      console.warn('Skipping render. A render node not found for component: ' . component.constructor.name);
+    }
+
+    // Request to re-render application.
+    foundNode.stateChanged = true;
+    this.render();
   }
 }
 
@@ -656,7 +786,7 @@ export function createApp(config) {
 
   window.$app = new CordovaApp();
   window.$app.setRootFunction(config.render);
-  console.log(selfClosingTags);
+
   document.addEventListener('deviceready', () => {
     $app.mount(config.mountEl);
   });
