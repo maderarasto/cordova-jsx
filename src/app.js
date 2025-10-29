@@ -81,7 +81,7 @@ class RenderNode {
     /** @type {RenderNode} */
     this.parent = null;
     /** @type {Component} */
-    this.instance = null;
+    this.instance = type === 'component' ? new tag() : null;
     /** @type {Node} */
     this.elementRef = null;
     /** @type {Record<string, Function[]>} */
@@ -188,6 +188,51 @@ class RenderNode {
   }
 
   /**
+   *
+   * @param {RenderNode} node
+   */
+  copyFrom(node) {
+    this.key = node.key;
+    this.type = node.type;
+    this.tag = node.tag;
+
+    this.oldProps = node.oldProps;
+    this.pendingProps = node.pendingProps;
+
+    this.mounted = node.mounted;
+    this.stateChanged = node.stateChanged;
+    this.effect = node.effect;
+    this.children = node.children;
+    this.parent = node.parent;
+    this.instance = node.instance;
+    this.elementRef = node.elementRef;
+    this.listeners = node.listeners;
+  }
+
+  clone() {
+    const cloned = new RenderNode(
+      this.type,
+      this.tag,
+      {
+        key: this.key,
+        ...this.pendingProps
+      }
+    );
+
+    cloned.effect = this.effect;
+    cloned.oldProps = this.oldProps;
+    cloned.mounted = this.mounted;
+    cloned.stateChanged = this.stateChanged;
+    cloned.children = this.children;
+    cloned.parent = this.parent;
+    cloned.instance = this.instance;
+    cloned.elementRef = this.elementRef;
+    cloned.listeners = this.listeners;
+
+    return cloned;
+  }
+
+  /**
    * Builds a render node tree from JSX structure.
    *
    * @param {RenderResult} jsx
@@ -278,8 +323,6 @@ function mountRenderSubtree(node) {
   node.effect = 'Placement';
 
   if (node.type === 'component') {
-    node.instance = new node.tag();
-
     const jsx = node.instance.render();
     const subNode = RenderNode.fromJSX(jsx);
 
@@ -359,7 +402,7 @@ function updateRenderNodes(newNode) {
   const subNode = RenderNode.fromJSX(jsx);
 
   if (subNode) {
-    copyData(newNode.children[0], subNode, true);
+    // copyData(newNode.children[0], subNode, true);
     newNode.children = [];
     newNode.appendChild(subNode);
   }
@@ -370,11 +413,23 @@ function updateRenderNodes(newNode) {
  * @param {RenderNode} currentNode
  * @param {RenderNode} newNode
  */
-function reuseNodeChildren(currentNode, newNode) {
-  newNode.children = [];
-  currentNode.children.forEach((child) => {
-    newNode.appendChild(child);
-  });
+function reuseNode(currentNode, newNode) {
+  const clonedCurrentNode = currentNode.clone();
+
+  if (newNode.type === 'component') {
+    const jsx = newNode.instance.render();
+    const subNode = RenderNode.fromJSX(jsx);
+
+    if (subNode) {
+      newNode.children = [];
+      newNode.appendChild(subNode);
+    }
+  }
+
+  clonedCurrentNode.parent = newNode.parent;
+  clonedCurrentNode.children = newNode.children;
+
+  newNode.copyFrom(clonedCurrentNode);
 }
 
 /**
@@ -392,30 +447,31 @@ function resolveNodeChanges(currentNode, newNode) {
   if (!currentNode) {
     mountRenderSubtree(newNode);
     return;
-  } else {
+  } else if (newNode.type !== 'root') {
     copyData(currentNode, newNode);
 
     if (shouldUpdateNode(newNode)) {
       updateRenderNodes(newNode);
     } else {
-      reuseNodeChildren(currentNode, newNode);
+      reuseNode(currentNode, newNode);
     }
   }
 
-  let position = 0;
-
-  while (position < newNode.children.length) {
-    const newNodeChild = newNode.children[position];
-    const matchingNode = findMatchingNode(currentNode, newNodeChild, position);
+  const processedChildren = [];
+  newNode.children.forEach((child, index) => {
+    const newNodeChild = newNode.children[index];
+    const matchingNode = findMatchingNode(currentNode, newNodeChild, index);
 
     resolveNodeChanges(matchingNode, newNodeChild);
-    position++;
-  }
+    processedChildren.push(matchingNode);
+  })
 
-  while (position < currentNode.children.length) {
-    currentNode.children[position].effect = 'Deletion';
-    position++;
-  }
+  currentNode.children.forEach((child) => {
+    if (!processedChildren.includes(child)) {
+      console.log(child);
+      child.effect = 'Deletion';
+    }
+  });
 }
 
 /**
@@ -640,6 +696,31 @@ function createElement(renderNode, index) {
 
 /**
  *
+ * @param {RenderChange && { nodeRef: RenderNode }} change
+ * @param {RenderNode[]} componentNodes
+ */
+function handlePlacement(change, componentNodes) {
+  if (change.nodeRef.type === 'component') {
+    componentNodes.unshift(change.nodeRef);
+  }
+
+  if (['element', 'text'].includes(change.nodeRef.type)) {
+    createElement(change.nodeRef, change.position);
+  }
+
+  processComponentNodes(componentNodes);
+}
+
+/**
+ *
+ * @param {RenderChange} change
+ */
+function handleUpdate(change) {
+
+}
+
+/**
+ *
  * @param {RenderNode[]} nodes
  */
 function processComponentNodes(nodes) {
@@ -723,7 +804,7 @@ export class CordovaApp {
 
     const deletions = resolveRenderChanges(this._rootRenderNode);
     const newChanges = resolveRenderChanges(newTree);
-    console.log(deletions);
+    console.log(deletions, newChanges);
     deletions.forEach((change) => {
       if (change.effect === 'Deletion') {
         unmountRenderNode(change.nodeRef)
@@ -737,21 +818,11 @@ export class CordovaApp {
     const processedComponentNodes = [];
     
     newChanges.forEach(change => {
-      if (change.effect !== 'Placement') {
-        console.log(change);
-        return;
+      if (change.effect === 'Placement') {
+        handlePlacement(change, processedComponentNodes)
       }
 
-      if (change.nodeRef.type === 'component') {
-        processedComponentNodes.unshift(change.nodeRef);
-        console.log([...processedComponentNodes]);
-      }
 
-      if (['element', 'text'].includes(change.nodeRef.type)) {
-        createElement(change.nodeRef, change.position);
-      }
-
-      processComponentNodes(processedComponentNodes);
     });
 
     confirmNodesProps(this._rootRenderNode);
