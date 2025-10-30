@@ -3,8 +3,8 @@ import Header from "@/Header";
 import img from '@public/img/logo.png';
 
 export default class Root extends Component {
-  constructor() {
-    super();
+  constructor(props) {
+    super(props);
 
     this.state = {
       id: 1,
@@ -21,7 +21,7 @@ export default class Root extends Component {
     return (
       <div style={{ fontSize: '1rem', color: this.state % 2 === 0 ? 'red' : 'black' }}>
         <div id="top-header" class={`class-1 class-2`}>
-          <Header />
+          <Header num={this.state.id} />
           <nav>Navigation</nav>
         </div>
         <p>State: {this.state.id}</p>

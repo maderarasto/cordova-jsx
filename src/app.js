@@ -9,7 +9,7 @@ export class Component {
   /**
    * Creates an instance of component.
    *
-   * @param props
+   * @param {Record<string, any>} props
    */
   constructor(props) {
     this.props = props;
@@ -149,6 +149,10 @@ class RenderNode {
     this.listeners = {};
   }
 
+  createComponent() {
+    this.instance = new this.tag(this.pendingProps);
+  }
+
   /**
    * Appends a child into current node.
    *
@@ -253,7 +257,7 @@ class RenderNode {
     let node;
 
     if (typeof elementName === 'function') {
-      node = new RenderNode('component', elementName);
+      node = new RenderNode('component', elementName, attributes);
     } else if ([...htmlTags].includes(elementName) || [...svgTags].includes(elementName)) {
       node = new RenderNode('element', elementName, attributes);
     } else {
@@ -327,7 +331,7 @@ function mountRenderSubtree(node) {
   node.effect = 'Placement';
 
   if (node.type === 'component') {
-    node.instance = new node.tag();
+    node.createComponent();
     const jsx = node.instance.render();
     const subNode = RenderNode.fromJSX(jsx);
 
@@ -354,6 +358,7 @@ function copyData(currentNode, newNode, recursive = false) {
 
     if (newNode.type === 'component') {
       newNode.instance = currentNode.instance;
+      newNode.instance.props = newNode.pendingProps;
       // newNode.instance.state = currentNode.instance.state;
       // newNode.stateChanged = currentNode.stateChanged;
     }
