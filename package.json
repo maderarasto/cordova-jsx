@@ -38,6 +38,7 @@
     "html-element-attributes": "^3.5.0",
     "html-tags": "^5.1.0",
     "self-closing-tags": "^1.0.1",
-    "svg-tags": "^1.0.0"
+    "svg-tags": "^1.0.0",
+    "uuid": "^13.0.0"
   }
 }

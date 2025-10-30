@@ -7,19 +7,19 @@ export default class Root extends Component {
     super();
 
     this.state = {
-      id: '1',
+      id: 1,
     };
   }
 
   handleClick() {
     this.setState({
-      id: '2',
+      id: this.state.id + 1,
     });
   }
 
   render() {
     return (
-      <div style={{ fontSize: '1rem', color: 'black' }}>
+      <div style={{ fontSize: '1rem', color: this.state % 2 === 0 ? 'red' : 'black' }}>
         <div id="top-header" class={`class-1 class-2`}>
           <Header />
           <nav>Navigation</nav>

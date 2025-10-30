@@ -1,5 +1,6 @@
 import htmlTags from "html-tags";
 import svgTags from 'svg-tags';
+import { v4 as uuid} from 'uuid';
 
 /** @type {CordovaApp} */
 let app = null;
@@ -13,6 +14,7 @@ export class Component {
   constructor(props) {
     this.props = props;
     this.state = {};
+    this.hash = uuid();
   }
 
   setState(state) {
@@ -81,7 +83,7 @@ class RenderNode {
     /** @type {RenderNode} */
     this.parent = null;
     /** @type {Component} */
-    this.instance = type === 'component' ? new tag() : null;
+    this.instance = null;
     /** @type {Node} */
     this.elementRef = null;
     /** @type {Record<string, Function[]>} */
@@ -192,6 +194,7 @@ class RenderNode {
    * @param {RenderNode} node
    */
   copyFrom(node) {
+    this.hash = node.hash;
     this.key = node.key;
     this.type = node.type;
     this.tag = node.tag;
@@ -219,6 +222,7 @@ class RenderNode {
       }
     );
 
+    cloned.hash = this.hash;
     cloned.effect = this.effect;
     cloned.oldProps = this.oldProps;
     cloned.mounted = this.mounted;
@@ -323,6 +327,7 @@ function mountRenderSubtree(node) {
   node.effect = 'Placement';
 
   if (node.type === 'component') {
+    node.instance = new node.tag();
     const jsx = node.instance.render();
     const subNode = RenderNode.fromJSX(jsx);
 
@@ -347,10 +352,10 @@ function copyData(currentNode, newNode, recursive = false) {
   if (currentNode.tag === newNode.tag) {
     newNode.oldProps = currentNode.oldProps;
 
-    if (currentNode.instance && newNode.instance) {
-      newNode.instance.state = currentNode.instance.state;
-      newNode.stateChanged = currentNode.stateChanged;
-      // TODO: copy element refs
+    if (newNode.type === 'component') {
+      newNode.instance = currentNode.instance;
+      // newNode.instance.state = currentNode.instance.state;
+      // newNode.stateChanged = currentNode.stateChanged;
     }
   }
 
@@ -742,6 +747,10 @@ function processComponentNodes(nodes) {
 function findNodeByComponent(node, component) {
   let foundNode = null;
 
+  if (node.type === 'component') {
+    console.log(`${node.instance.constructor.name}: ${node.instance.hash}`);
+  }
+
   if (node.instance === component) {
     return node;
   }
@@ -833,10 +842,12 @@ export class CordovaApp {
    * @param {Component} component
    */
   onStateChanged(component) {
+    console.log(`Searching for: ${component.hash}`);
     const foundNode = findNodeByComponent(this._rootRenderNode, component);
 
     if (!foundNode) {
-      console.warn('Skipping render. A render node not found for component: ' . component.constructor.name);
+      console.warn('Skipping render. A render node not found for component: ' + component.constructor.name);
+      return;
     }
 
     // Request to re-render application.
