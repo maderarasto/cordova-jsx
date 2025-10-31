@@ -292,7 +292,8 @@ class RenderNode {
     let node;
 
     if (typeof elementName === 'function') {
-      node = new RenderNode('component', elementName, attributes);
+      node = new RenderNode('component', elementName, { children, ...attributes });
+      children = [];
     } else if ([...htmlTags].includes(elementName) || [...svgTags].includes(elementName)) {
       node = new RenderNode('element', elementName, attributes);
     } else {
@@ -360,6 +361,34 @@ function findMatchingNode(currentNode, searchedNode, position) {
 
 /**
  *
+ * @param {RenderResult} jsx
+ */
+function flattenChildrenInJSX(jsx) {
+  if (typeof jsx === 'string') {
+    return jsx;
+  }
+
+  let children = [];
+  jsx.children.forEach(child => {
+    if (!Array.isArray(child)) {
+      children.push(child);
+      return;
+    }
+
+    children = [
+      ...children,
+      ...child
+    ];
+  });
+
+  return {
+    ...jsx,
+    children,
+  };
+}
+
+/**
+ *
  * @param {RenderNode} node
  */
 function mountRenderSubtree(node) {
@@ -367,7 +396,8 @@ function mountRenderSubtree(node) {
 
   if (node.type === 'component') {
     node.createComponent();
-    const jsx = node.instance.render();
+    let jsx = node.instance.render();
+    jsx = flattenChildrenInJSX(jsx);
     const subNode = RenderNode.fromJSX(jsx);
 
     if (subNode) {
@@ -444,7 +474,8 @@ function updateRenderNodes(newNode) {
     return;
   }
 
-  const jsx = newNode.instance.render();
+  let jsx = newNode.instance.render();
+  jsx = flattenChildrenInJSX(jsx);
   const subNode = RenderNode.fromJSX(jsx);
 
   if (subNode) {
@@ -463,7 +494,8 @@ function reuseNode(currentNode, newNode) {
   const clonedCurrentNode = currentNode.clone();
 
   if (newNode.type === 'component') {
-    const jsx = newNode.instance.render();
+    let jsx = newNode.instance.render();
+    jsx = flattenChildrenInJSX(jsx);
     const subNode = RenderNode.fromJSX(jsx);
 
     if (subNode) {

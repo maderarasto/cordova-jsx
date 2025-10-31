@@ -10,8 +10,12 @@ export default class Header extends Component {
   }
 
   render() {
+    console.log(this.props.children);
     return (
-      <h1 className="title">Hlavicka {this.props.num}</h1>
+      <div>
+        <h1>Title</h1>
+        {this.props.children}
+      </div>
     )
   }
 }

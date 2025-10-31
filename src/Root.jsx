@@ -31,7 +31,9 @@ export default class Root extends Component {
     return (
       <div style={{ fontSize: '1rem', color: this.state.id % 2 === 0 ? 'red' : 'black' }}>
         <div id="top-header" class={`class-1 class-2`}>
-          <Header num={this.state.id} />
+          <Header num={this.state.id}>
+            <h2>Hello Cordova</h2>
+          </Header>
           <nav>Navigation</nav>
         </div>
         <p>State: {this.state.id}</p>
