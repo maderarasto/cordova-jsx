@@ -1,8 +1,8 @@
 import {Component} from "@/app";
 
 export default class Header extends Component {
-  mounted() {
-    console.log("Header mounted.");
+  async mounted() {
+    await new Promise(resolve => setTimeout(resolve, 5000));
   }
 
   updated() {

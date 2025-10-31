@@ -34,22 +34,22 @@ export class Component {
   /**
    * A hook is triggered when component is mounted into DOM.
    */
-  mounted() {}
+  async mounted() {}
 
   /**
    * a hook is triggered when application is resumed into component.
    */
-  resumed() {}
+  async resumed() {}
 
   /**
    * A hook is triggered when component is re-rendered.
    */
-  updated() {}
+  async updated() {}
 
   /**
    * A hook is triggered before component is destroyed.
    */
-  destroyed() {}
+  async destroyed() {}
 }
 
 class RenderNode {

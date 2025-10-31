@@ -14,11 +14,11 @@ export default class Root extends Component {
   }
 
   mounted() {
-    console.log("Root mounted.");
-  }
-
-  updated() {
-    console.log("Root updated.");
+    setTimeout(() => {
+      this.setState({
+        id: 10,
+      });
+    }, 5000)
   }
 
   handleClick() {
