@@ -9,6 +9,16 @@ export default class Root extends Component {
     this.state = {
       id: 1,
     };
+
+    this.handleClick = this.handleClick.bind(this);
+  }
+
+  mounted() {
+    console.log("Root mounted.");
+  }
+
+  updated() {
+    console.log("Root updated.");
   }
 
   handleClick() {
@@ -19,7 +29,7 @@ export default class Root extends Component {
 
   render() {
     return (
-      <div style={{ fontSize: '1rem', color: this.state % 2 === 0 ? 'red' : 'black' }}>
+      <div style={{ fontSize: '1rem', color: this.state.id % 2 === 0 ? 'red' : 'black' }}>
         <div id="top-header" class={`class-1 class-2`}>
           <Header num={this.state.id} />
           <nav>Navigation</nav>
@@ -32,7 +42,7 @@ export default class Root extends Component {
           <li>REact</li>
         </ul>
         <img src={img} alt="" />
-        <button onclick={this.handleClick.bind(this)}>Click</button>
+        <button onclick={this.handleClick}>Click</button>
       </div>
     )
   }

@@ -34,6 +34,12 @@ type RenderChange = {
   newProps?: Record<string, any>
 }
 
+type PropDiff = {
+  type: 'Add' | 'Update' | 'Remove'
+  name: string
+  value?: any
+}
+
 type AppConfig = {
   mountEl: HTMLElement | string
   render: RenderCallback

@@ -77,6 +77,7 @@ class RenderNode {
     this.effect = '';
     this.stateChanged = false;
     this.mounted = false;
+    this.pendingUpdate = false;
 
     /** @type {RenderNode[]} */
     this.children = [];
@@ -117,6 +118,12 @@ class RenderNode {
     }, 0) === this.children.length;
   }
 
+  allChildrenUpdated() {
+    return this.children.reduce((count, childNode) => {
+      return count + (!childNode.pendingUpdate && childNode.allChildrenUpdated() ? 1 : 0);
+    }, 0) === this.children.length;
+  }
+
   /**
    *
    * @param {string} type
@@ -133,6 +140,32 @@ class RenderNode {
 
     this.elementRef.addEventListener(type, listener);
     this.listeners[type].push(listener);
+  }
+
+  removeListener(type, listener) {
+    /** @type Function[] */
+    const listenersWithType = this.listeners[type] ?? [];
+
+    if (listenersWithType.length === 0) {
+      return;
+    }
+
+    let foundListenerIndex = -1;
+    const foundListener = listenersWithType.find((anotherListener, index) => {
+      if (anotherListener === listener) {
+        foundListenerIndex = index;
+        return true;
+      }
+
+      return false;
+    });
+
+    if (!foundListener) {
+      throw new Error(`Listener for ${type} on node ${this.tag} not found. Cause: listener probably wasn't bound in constructor.`);
+    }
+
+    this.elementRef.removeEventListener(type, foundListener);
+    listenersWithType.splice(foundListenerIndex, 1);
   }
 
   cleanListeners() {
@@ -207,6 +240,7 @@ class RenderNode {
     this.pendingProps = node.pendingProps;
 
     this.mounted = node.mounted;
+    this.pendingUpdate = node.pendingUpdate;
     this.stateChanged = node.stateChanged;
     this.effect = node.effect;
     this.children = node.children;
@@ -230,6 +264,7 @@ class RenderNode {
     cloned.effect = this.effect;
     cloned.oldProps = this.oldProps;
     cloned.mounted = this.mounted;
+    cloned.pendingUpdate = this.pendingUpdate;
     cloned.stateChanged = this.stateChanged;
     cloned.children = this.children;
     cloned.parent = this.parent;
@@ -355,12 +390,12 @@ function mountRenderSubtree(node) {
 function copyData(currentNode, newNode, recursive = false) {
   if (currentNode.tag === newNode.tag) {
     newNode.oldProps = currentNode.oldProps;
+    newNode.elementRef = currentNode.elementRef;
 
     if (newNode.type === 'component') {
       newNode.instance = currentNode.instance;
       newNode.instance.props = newNode.pendingProps;
-      // newNode.instance.state = currentNode.instance.state;
-      // newNode.stateChanged = currentNode.stateChanged;
+      newNode.stateChanged = currentNode.stateChanged;
     }
   }
 
@@ -403,6 +438,7 @@ function shouldUpdateNode(node) {
  */
 function updateRenderNodes(newNode) {
   newNode.effect = 'Update';
+  newNode.pendingUpdate = true;
 
   if (newNode.type !== 'component') {
     return;
@@ -478,7 +514,6 @@ function resolveNodeChanges(currentNode, newNode) {
 
   currentNode.children.forEach((child) => {
     if (!processedChildren.includes(child)) {
-      console.log(child);
       child.effect = 'Deletion';
     }
   });
@@ -499,7 +534,7 @@ function resolveRenderChanges(node, position = 0) {
     return changes;
   }
 
-  if (!node.isRoot() && node.effect !== '') {
+  if (node.effect !== '') {
     const change = {
       effect: node.effect,
       parent: node.parent,
@@ -545,13 +580,16 @@ function unmountRenderNode(node) {
  *
  * @param {RenderNode} node
  */
-function confirmNodesProps(node) {
+function cleanNodes(node) {
+  node.effect = '';
+  node.stateChanged = false;
+
   if (!compareProps(node.oldProps, node.pendingProps)) {
     node.oldProps = node.pendingProps;
   }
 
   node.children.forEach((child) => {
-    confirmNodesProps(child);
+    cleanNodes(child);
   });
 }
 
@@ -619,7 +657,7 @@ function resolveStyle(value) {
 function resolveElementAttributes(node) {
   for (let [key, value] of Object.entries(node.pendingProps)) {
     if (key.startsWith('on')) {
-      node.addListener(key.substring(2), value);
+      node.addListener(key.substring(2).toLowerCase(), value);
       continue;
     }
 
@@ -701,7 +739,112 @@ function createElement(renderNode, index) {
   const childAt = parentEl.children[index];
 
   parentEl.insertBefore(renderNode.elementRef, childAt);
+}
 
+/**
+ *
+ * @param {Record<string, any>} oldProps
+ * @param {Record<string, any>} pendingProps
+ * @returns {PropDiff[]}
+ */
+function diffProps(oldProps, pendingProps) {
+  /** @type {PropDiff[]} */
+  const propDiffs = [];
+
+  for (const [key, value] of Object.entries(pendingProps)) {
+    if (oldProps[key] === undefined || oldProps[key] === null) {
+      propDiffs.push({ type: 'Add', name: key, value });
+    } else if (value !== oldProps[key]) {
+      propDiffs.push({ type: 'Update', name: key, value, });
+    }
+  }
+
+  for (const [key, value] of Object.entries(oldProps)) {
+    if (pendingProps[key] === undefined || pendingProps[key] === null) {
+      propDiffs.push({ type: 'Remove', name: key, value });
+    }
+  }
+
+  return propDiffs;
+}
+
+/**
+ *
+ * @param {RenderNode} renderNode
+ * @param {string} propName
+ * @param {any} propValue
+ */
+function handleRemovingProps(renderNode, propName, propValue) {
+  if (propName.startsWith('on')) {
+    renderNode.removeListener(propName.substring(2).toLowerCase(), propValue);
+  } else {
+    renderNode.elementRef.removeAttribute(propName);
+  }
+}
+
+/**
+ *
+ * @param {RenderNode} renderNode
+ * @param {string} propName
+ * @param {any} propValue
+ */
+function handleUpdatingProps(renderNode, propName, propValue) {
+  if (propName.startsWith('on')) {
+    const eventName = propName.substring(2).toLowerCase();
+    renderNode.removeListener(eventName, renderNode.oldProps[eventName]);
+    renderNode.addListener(eventName, propValue);
+  } else if (propName === 'class') {
+    propValue = resolveClassName(propValue);
+  } else if (propName === 'style') {
+    propValue = resolveStyle(propValue);
+  }
+
+  if (!propName.startsWith('on')) {
+    renderNode.elementRef.setAttribute(propName, propValue);
+  }
+}
+
+/**
+ *
+ * @param {RenderNode} renderNode
+ * @param {string} propName
+ * @param {any} propValue
+ */
+function handleAddingProps(renderNode, propName, propValue) {
+  if (propName.startsWith('on')) {
+    renderNode.addListener(propName.substring(2).toLowerCase(), propValue);
+    return;
+  }
+
+  if (propName === 'class') {
+    propValue = resolveClassName(propValue);
+  } else if (propName === 'style') {
+    propValue = resolveStyle(propValue);
+  }
+
+  renderNode.elementRef.setAttribute(propName, propValue);
+}
+
+/**
+ *
+ * @param {RenderNode} renderNode
+ */
+function updateElement(renderNode) {
+  const diffedProps = diffProps(renderNode.oldProps, renderNode.pendingProps);
+
+  if (!renderNode.elementRef) {
+    console.log(renderNode);
+  }
+
+  diffedProps.forEach((prop) => {
+    if (prop.type === 'Remove' ) {
+      handleRemovingProps(renderNode, prop.name, prop.value);
+    } else if (prop.type === 'Add' ) {
+      handleAddingProps(renderNode, prop.name, prop.value);
+    } else if (prop.type === 'Update' ) {
+      handleUpdatingProps(renderNode, prop.name, prop.value);
+    }
+  });
 }
 
 /**
@@ -718,28 +861,52 @@ function handlePlacement(change, componentNodes) {
     createElement(change.nodeRef, change.position);
   }
 
-  processComponentNodes(componentNodes);
+  processComponentNodes(componentNodes, 'mount');
 }
 
 /**
  *
- * @param {RenderChange} change
+ * @param {RenderChange && { nodeRef: RenderNode }} change
+ * @param {RenderNode[]} componentNodes
  */
-function handleUpdate(change) {
+function handleUpdate(change, componentNodes) {
+  change.nodeRef.pendingUpdate = false;
 
+  if (change.nodeRef.type === 'component') {
+    componentNodes.unshift(change.nodeRef);
+  }
+
+  if (['element'].includes(change.nodeRef.type)) {
+    updateElement(change.nodeRef);
+  }
+
+  processComponentNodes(componentNodes, 'update');
 }
 
 /**
  *
  * @param {RenderNode[]} nodes
+ * @param {'mount'|'update'}action
  */
-function processComponentNodes(nodes) {
+function processComponentNodes(nodes, action = 'mount') {
+  if (!['mount', 'update'].includes(action)) {
+    action = 'mount';
+  }
+
   while (nodes.length > 0) {
-    if (!nodes[0].allChildrenMounted()) {
+    if (action === 'mount' && !nodes[0].allChildrenMounted()) {
+      break;
+    } else if (action === 'update' && !nodes[0].allChildrenUpdated()) {
       break;
     }
 
-    nodes[0].mounted = true;
+    if (action === 'mount') {
+      nodes[0].mounted = true;
+      nodes[0].instance.mounted();
+    } else if (action === 'update') {
+      nodes[0].instance.updated();
+    }
+
     nodes.shift();
   }
 }
@@ -751,10 +918,6 @@ function processComponentNodes(nodes) {
  */
 function findNodeByComponent(node, component) {
   let foundNode = null;
-
-  if (node.type === 'component') {
-    console.log(`${node.instance.constructor.name}: ${node.instance.hash}`);
-  }
 
   if (node.instance === component) {
     return node;
@@ -818,7 +981,7 @@ export class CordovaApp {
 
     const deletions = resolveRenderChanges(this._rootRenderNode);
     const newChanges = resolveRenderChanges(newTree);
-    console.log(deletions, newChanges);
+
     deletions.forEach((change) => {
       if (change.effect === 'Deletion') {
         unmountRenderNode(change.nodeRef)
@@ -829,17 +992,19 @@ export class CordovaApp {
     this._rootRenderNode.elementRef = this._rootEl;
 
     /** @type RenderNode[] */
-    const processedComponentNodes = [];
-    
+    const mountComponentNodes = [];
+    /** @type RenderNode[] */
+    const updateComponentNodes = [];
+
     newChanges.forEach(change => {
       if (change.effect === 'Placement') {
-        handlePlacement(change, processedComponentNodes)
+        handlePlacement(change, mountComponentNodes)
+      } else if (change.effect === 'Update') {
+        handleUpdate(change, updateComponentNodes)
       }
-
-
     });
 
-    confirmNodesProps(this._rootRenderNode);
+    cleanNodes(this._rootRenderNode);
   }
 
   /**
@@ -847,7 +1012,6 @@ export class CordovaApp {
    * @param {Component} component
    */
   onStateChanged(component) {
-    console.log(`Searching for: ${component.hash}`);
     const foundNode = findNodeByComponent(this._rootRenderNode, component);
 
     if (!foundNode) {
