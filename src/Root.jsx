@@ -2,6 +2,13 @@ import {Component, createState} from "@/app";
 import Header from "@/Header";
 import img from '@public/img/logo.png';
 
+const listItems = [
+  { id: 1, name: 'HTML' },
+  { id: 2, name: 'CSS' },
+  { id: 3, name: 'Javascript' },
+  { id: 4, name: 'Node.js' },
+];
+
 export default class Root extends Component {
   constructor(props) {
     super(props);
@@ -14,11 +21,11 @@ export default class Root extends Component {
   }
 
   mounted() {
-    setTimeout(() => {
-      this.setState({
-        id: 10,
-      });
-    }, 5000)
+    // setTimeout(() => {
+    //   this.setState({
+    //     id: 10,
+    //   });
+    // }, 5000)
   }
 
   handleClick() {
@@ -38,10 +45,9 @@ export default class Root extends Component {
         </div>
         <p>State: {this.state.id}</p>
         <ul>
-          <li>HTML</li>
-          <li>CSS</li>
-          <li>JS</li>
-          <li>REact</li>
+          {listItems.map((item, i) => (
+            <li key={item.id}>{item.name}</li>
+          ))}
         </ul>
         <img src={img} alt="" />
         <button onclick={this.handleClick}>Click</button>

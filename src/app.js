@@ -52,6 +52,23 @@ export class Component {
   async destroyed() {}
 }
 
+/**
+ *
+ * @param {JSX[]} jsxArray
+ */
+function checkKeysInJsxArray(jsxArray) {
+  const usedKeys = [];
+
+  return jsxArray.every((item) => {
+    if (!item.attributes || !item.attributes.key || usedKeys.includes(item.attributes.key)) {
+      return false;
+    }
+
+    usedKeys.push(item.attributes.key);
+    return true;
+  });
+}
+
 class RenderNode {
   /**
    * Creates an instance fo renderable node.
@@ -296,6 +313,8 @@ class RenderNode {
       children = [];
     } else if ([...htmlTags].includes(elementName) || [...svgTags].includes(elementName)) {
       node = new RenderNode('element', elementName, attributes);
+    } else if (typeof elementName === 'object') {
+      throw new Error('Object cannot be rendered as JSX node.!');
     } else {
       node = new RenderNode('text', elementName);
     }
@@ -313,7 +332,17 @@ class RenderNode {
         return;
       }
 
-      RenderNode.fromJSX(child, node);
+      if (Array.isArray(child)) {
+        if (!checkKeysInJsxArray(child)) {
+          throw new Error(`Dynamically mapped nodes in loop have to have unique keys specified in "key" prop.`);
+        }
+
+        child.forEach(child => {
+          RenderNode.fromJSX(child, node);
+        });
+      } else {
+        RenderNode.fromJSX(child, node);
+      }
     });
 
     return node;
@@ -337,6 +366,25 @@ function createRenderTree(jsx) {
 }
 
 /**
+ *
+ * @param {RenderNode} renderNode
+ * @param {string} key
+ */
+function findChildNodeWithKey(renderNode, key) {
+  /** @type {RenderNode} */
+  let foundNode = null;
+
+  for (const child of renderNode.children) {
+    if (child.key === key) {
+      foundNode = child;
+      break;
+    }
+  }
+
+  return foundNode;
+}
+
+/**
  * Find a matching node in children of current node.
  * Matching
  *
@@ -346,17 +394,26 @@ function createRenderTree(jsx) {
  * @return {RenderNode}
  */
 function findMatchingNode(currentNode, searchedNode, position) {
-  if (!currentNode || currentNode.children.length <= position) {
+  /** @type {RenderNode} */
+  let foundNode = null;
+
+  if (!currentNode) {
     return null;
   }
 
-  let foundNode = currentNode.children[position];
+  if (searchedNode.key) {
+    foundNode = findChildNodeWithKey(currentNode, searchedNode.key);
+  }
 
-  if (!foundNode || foundNode.tag !== searchedNode.tag) {
+  if (foundNode) {
+    return foundNode;
+  }
+
+  if (currentNode.children.length <= position) {
     return null;
   }
 
-  return foundNode;
+  return currentNode.children[position];
 }
 
 /**

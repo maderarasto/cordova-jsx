@@ -10,7 +10,7 @@ export default class Header extends Component {
   }
 
   render() {
-    console.log(this.props.children);
+
     return (
       <div>
         <h1>Title</h1>

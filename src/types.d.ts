@@ -4,7 +4,7 @@ type JSX = {
   children: (JSX | string)[]
 }
 
-type RenderResult = JSX | string
+type RenderResult = JSX | JSX[] | string
 type RenderCallback = () => RenderResult
 
 type RenderNodeType = (
