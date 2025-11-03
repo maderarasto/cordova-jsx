@@ -1,4 +1,4 @@
-import {Component, createState} from "@/app";
+import {Component} from "@/app";
 import Header from "@/Header";
 import img from '@public/img/logo.png';
 
@@ -18,6 +18,8 @@ export default class Root extends Component {
     };
 
     this.handleClick = this.handleClick.bind(this);
+    this.handleTextChange = this.handleTextChange.bind(this);
+    this.handleSubmit = this.handleSubmit.bind(this);
   }
 
   mounted() {
@@ -32,6 +34,15 @@ export default class Root extends Component {
     this.setState({
       id: this.state.id + 1,
     });
+  }
+
+  handleSubmit(ev) {
+    ev.preventDefault();
+    console.log(ev);
+  }
+
+  handleTextChange(ev) {
+    console.log(ev);
   }
 
   render() {
@@ -49,6 +60,10 @@ export default class Root extends Component {
             <li key={item.id}>{item.name}</li>
           ))}
         </ul>
+        <form onsubmit={this.handleSubmit}>
+          <input type="text" onInput={this.handleTextChange} />
+          <input type="submit" />
+        </form>
         <img src={img} alt="" />
         <button onclick={this.handleClick}>Click</button>
       </div>

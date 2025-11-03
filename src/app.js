@@ -4,6 +4,10 @@ import { v4 as uuid} from 'uuid';
 
 /** @type {CordovaApp} */
 let app = null;
+/** @type {RenderNode} */
+let inProgressTree = null;
+/** @type {RenderNode} */
+let lastMountedNode = null;
 
 export class Component {
   /**
@@ -17,8 +21,12 @@ export class Component {
     this.hash = uuid();
   }
 
-  setState(state) {
-    this.state = state;
+  /**
+   *
+   * @param {Record<string, any>} newState
+   */
+  setState(newState) {
+    this.state = newState;
     $app.onStateChanged(this);
   }
 
@@ -89,6 +97,8 @@ class RenderNode {
     this.oldProps = {};
     /** @type {Record<string, any>} */
     this.pendingProps = otherProps;
+    /** @type {Record<string, any>} */
+    this.state = {};
 
     /** @type {RenderNodeEffect} */
     this.effect = '';
@@ -201,6 +211,7 @@ class RenderNode {
 
   createComponent() {
     this.instance = new this.tag(this.pendingProps);
+    this.state = this.instance.state;
   }
 
   /**
@@ -255,6 +266,7 @@ class RenderNode {
 
     this.oldProps = node.oldProps;
     this.pendingProps = node.pendingProps;
+    this.state = node.state;
 
     this.mounted = node.mounted;
     this.pendingUpdate = node.pendingUpdate;
@@ -280,6 +292,7 @@ class RenderNode {
     cloned.hash = this.hash;
     cloned.effect = this.effect;
     cloned.oldProps = this.oldProps;
+    cloned.state = this.state;
     cloned.mounted = this.mounted;
     cloned.pendingUpdate = this.pendingUpdate;
     cloned.stateChanged = this.stateChanged;
@@ -452,7 +465,9 @@ function mountRenderSubtree(node) {
   node.effect = 'Placement';
 
   if (node.type === 'component') {
+    lastMountedNode = node;
     node.createComponent();
+
     let jsx = node.instance.render();
     jsx = flattenChildrenInJSX(jsx);
     const subNode = RenderNode.fromJSX(jsx);
@@ -482,6 +497,7 @@ function copyData(currentNode, newNode, recursive = false) {
     if (newNode.type === 'component') {
       newNode.instance = currentNode.instance;
       newNode.instance.props = newNode.pendingProps;
+      newNode.state = currentNode.state;
       newNode.stateChanged = currentNode.stateChanged;
     }
   }
@@ -1064,12 +1080,12 @@ export class CordovaApp {
     }
 
     const newJSX = this._rootFunc();
-    const newTree = createRenderTree(newJSX);
+    inProgressTree = createRenderTree(newJSX);
 
-    resolveNodeChanges(this._rootRenderNode, newTree);
+    resolveNodeChanges(this._rootRenderNode, inProgressTree);
 
     const deletions = resolveRenderChanges(this._rootRenderNode);
-    const newChanges = resolveRenderChanges(newTree);
+    const newChanges = resolveRenderChanges(inProgressTree);
 
     deletions.forEach((change) => {
       if (change.effect === 'Deletion') {
@@ -1077,8 +1093,9 @@ export class CordovaApp {
       }
     });
 
-    this._rootRenderNode = newTree;
+    this._rootRenderNode = inProgressTree;
     this._rootRenderNode.elementRef = this._rootEl;
+    inProgressTree = null;
 
     /** @type RenderNode[] */
     const mountComponentNodes = [];
@@ -1094,6 +1111,7 @@ export class CordovaApp {
     });
 
     cleanNodes(this._rootRenderNode);
+    lastMountedNode = null;
   }
 
   /**
@@ -1110,6 +1128,7 @@ export class CordovaApp {
 
     // Request to re-render application.
     foundNode.stateChanged = true;
+    foundNode.state = component.state;
     this.render();
   }
 }
