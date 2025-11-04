@@ -1,4 +1,4 @@
-import {Component} from "@/app";
+import {Component} from "@/cordova-jsx/app";
 
 export default class Header extends Component {
   async mounted() {

@@ -1,4 +1,4 @@
-import {Component, createRef} from "@/app";
+import {Component, createRef} from "@/cordova-jsx/app";
 import Header from "@/Header";
 import img from '@public/img/logo.png';
 
@@ -9,7 +9,7 @@ const listItems = [
   { id: 4, name: 'Node.js' },
 ];
 
-export default class Root extends Component {
+export default class App extends Component {
   constructor(props) {
     super(props);
 

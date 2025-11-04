@@ -1,9 +1,9 @@
-import {createApp} from "@/app";
-import Root from "@/Root";
+import App from "@/App";
+import {createApp} from "@/cordova-jsx/app";
 
 createApp({
   mountEl: '#app',
   render() {
-    return <Root />
+    return <App />
   }
 });
