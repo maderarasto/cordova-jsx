@@ -77,6 +77,20 @@ function checkKeysInJsxArray(jsxArray) {
   });
 }
 
+export function createRef(value) {
+  if (!lastMountedNode || lastMountedNode.type !== 'component') {
+    throw new Error();
+  }
+
+  /** @type {RefObject} */
+  const ref = {
+    current: value,
+  }
+
+  lastMountedNode.refs.push(ref);
+  return ref;
+}
+
 class RenderNode {
   /**
    * Creates an instance fo renderable node.
@@ -86,7 +100,7 @@ class RenderNode {
    * @param {RenderNodeProps} props
    */
   constructor(type, tag, props = {}) {
-    const { key, ...otherProps } = props ?? {};
+    const { key, ref, ...otherProps } = props ?? {};
 
     /** @type {string} **/
     this.key = key;
@@ -99,6 +113,10 @@ class RenderNode {
     this.pendingProps = otherProps;
     /** @type {Record<string, any>} */
     this.state = {};
+    /** @type {RefObject} */
+    this.ref = ref;
+    /** @type {RefObject[]} */
+    this.refs = [];
 
     /** @type {RenderNodeEffect} */
     this.effect = '';
@@ -267,6 +285,8 @@ class RenderNode {
     this.oldProps = node.oldProps;
     this.pendingProps = node.pendingProps;
     this.state = node.state;
+    this.ref = node.ref;
+    this.refs = node.refs;
 
     this.mounted = node.mounted;
     this.pendingUpdate = node.pendingUpdate;
@@ -293,6 +313,8 @@ class RenderNode {
     cloned.effect = this.effect;
     cloned.oldProps = this.oldProps;
     cloned.state = this.state;
+    cloned.ref = this.ref;
+    cloned.refs = this.refs;
     cloned.mounted = this.mounted;
     cloned.pendingUpdate = this.pendingUpdate;
     cloned.stateChanged = this.stateChanged;
@@ -964,6 +986,10 @@ function handlePlacement(change, componentNodes) {
 
   if (['element', 'text'].includes(change.nodeRef.type)) {
     createElement(change.nodeRef, change.position);
+
+    if (change.nodeRef.ref) {
+      change.nodeRef.ref.current = change.nodeRef.elementRef;
+    }
   }
 
   processComponentNodes(componentNodes, 'mount');

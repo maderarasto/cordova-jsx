@@ -14,6 +14,10 @@ type RenderNodeType = (
   | 'text'
 )
 
+type RefObject = {
+  current: any
+}
+
 type RenderNodeEffect = (
   | ''
   | 'Placement'

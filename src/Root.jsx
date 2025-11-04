@@ -1,4 +1,4 @@
-import {Component} from "@/app";
+import {Component, createRef} from "@/app";
 import Header from "@/Header";
 import img from '@public/img/logo.png';
 
@@ -17,17 +17,21 @@ export default class Root extends Component {
       id: 1,
     };
 
+    this.inputRef = createRef(null);
+
     this.handleClick = this.handleClick.bind(this);
     this.handleTextChange = this.handleTextChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
   }
 
   mounted() {
-    // setTimeout(() => {
-    //   this.setState({
-    //     id: 10,
-    //   });
-    // }, 5000)
+    if (this.inputRef.current) {
+      this.inputRef.current.focus();
+    }
+  }
+
+  async updated() {
+    console.log(this.inputRef);
   }
 
   handleClick() {
@@ -61,7 +65,7 @@ export default class Root extends Component {
           ))}
         </ul>
         <form onsubmit={this.handleSubmit}>
-          <input type="text" onInput={this.handleTextChange} />
+          <input ref={this.inputRef} type="text" onInput={this.handleTextChange} />
           <input type="submit" />
         </form>
         <img src={img} alt="" />
